@@ -48,8 +48,10 @@ float flowRate;
 unsigned int flowMilliLitres = 0;
 unsigned int totalMilliLitres = 0;
 volatile byte pulseCount;
+float liter = 0.0;
+float tk = 0.0;
 float perLiterTk = 1.0;
-int i=0;
+int i = 0;
 
 void IRAM_ATTR pulseCounter()
 {
@@ -87,7 +89,33 @@ int sonar()
   return distance;
 }
 
-unsigned int measure_water()
+void print_consumed_water(int index, float l)
+{
+  digitalWrite(valve, LOW);
+  data[index].tk = data[index].tk - tk;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  String n = "THANK YOU " + data[index].name;
+  lcd.print(n);
+  lcd.setCursor(0, 1);
+  String lt = "CONSUMED : " + String(l, 3) + "L";
+  lcd.print(lt);
+  lcd.setCursor(0, 2);
+  String ntk = "BALANCE : " + String(data[index].tk) + "Tk";
+  lcd.print(ntk);
+  currentMillis = 0;
+  previousMillis = 0;
+  pulse1Sec = 0;
+  flowRate = 0;
+  flowMilliLitres = 0;
+  totalMilliLitres = 0;
+  liter = 0.0;
+  tk = 0.0;
+  delay(2000);
+  lcd.clear();
+}
+
+float measure_water()
 {
   currentMillis = millis();
   if (currentMillis - previousMillis > interval)
@@ -99,14 +127,20 @@ unsigned int measure_water()
     previousMillis = millis();
     flowMilliLitres = (flowRate / 60) * 1000;
     totalMilliLitres += flowMilliLitres;
+    liter = static_cast<float>(totalMilliLitres) / 1000.0;
+    tk = (perLiterTk / 1000.0) * static_cast<float>(totalMilliLitres);
+    String p = "CONSUMPTION: " + String(liter, 3) + " L";
+    String t = "TOTAL TK : " + String(tk, 3) + " BDT";
+    lcd.setCursor(0, 0);
+    lcd.print(p);
+    lcd.setCursor(0, 1);
+    lcd.print(t);
   }
-  return totalMilliLitres;
+  return liter;
 }
 
 void sonar_water(int index)
 {
-  float liter = 0.0;
-  float tk = 0.0;
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("PROCESSINNG.........");
@@ -114,40 +148,24 @@ void sonar_water(int index)
   delay(2000);
   while (true)
   {
-    int distance = sonar();
-    unsigned int ml = measure_water();
-    liter = static_cast<float>(ml) / 1000.0;
-    tk = (perLiterTk / 1000.0) * static_cast<float>(ml);
-    String p = "CONSUMPTION: " + String(liter, 3) + " L";
-    String t = "TOTAL TK : " + String(tk, 3) + " BDT";
-    lcd.setCursor(0, 0);
-    lcd.print(p);
-    lcd.setCursor(0, 1);
-    lcd.print(t);
-    if (distance <= 4 || tk >= data[index].tk)
+    measure_water();
+    if (sonar() <= 4 || tk >= data[index].tk)
     {
-      currentMillis = 0;
-      previousMillis = 0;
-      pulse1Sec = 0;
-      flowRate = 0;
-      flowMilliLitres = 0;
-      totalMilliLitres = 0;
-      data[index].tk = data[index].tk - tk;
-      digitalWrite(valve, LOW);
+      print_consumed_water(index, liter);
       break;
     }
   }
-  delay(2000);
-  lcd.clear();
 }
 
 void key_water(int index)
 {
   int value = 0;
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("TYPE THE AMOUNT AND");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print("PRESS # :");
+  lcd.setCursor(i, 2);
+  lcd.blink();
   while (true)
   {
     char key = keypad.getKey();
@@ -157,12 +175,40 @@ void key_water(int index)
       {
         value = value * 10 + (key - '0');
         i++;
-        lcd.setCursor(i,2);
+        lcd.setCursor(i, 2);
         lcd.print(key);
       }
       else if (key == '#')
       {
-
+        i = 0;
+        lcd.noBlink();
+        lcd.noCursor();
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("PROCESSINNG.........");
+        delay(2000);
+        float money = value * perLiterTk;
+        if (money <= data[index].tk)
+        {
+          while (true)
+          {
+            digitalWrite(valve, HIGH);
+            if (measure_water() >= value)
+            {
+              print_consumed_water(index, liter);
+              delay(2000);
+              break;
+            }
+          }
+        }
+        else
+        {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("NOT ENOUGH MONEY");
+          delay(2000);
+          lcd.clear();
+        }
         break;
       }
     }
@@ -210,7 +256,6 @@ void loop()
       printUserData(index);
       while (data[index].tk > 0)
       {
-        int distance = sonar();
         char key = keypad.getKey();
         switch (key)
         {
@@ -241,7 +286,7 @@ void loop()
         //   {
         //   }
         // }
-        if (distance <= 4)
+        if (sonar() <= 4)
         {
           sonar_water(index);
           break;
