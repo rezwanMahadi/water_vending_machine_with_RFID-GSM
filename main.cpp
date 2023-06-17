@@ -160,6 +160,7 @@ void sonar_water(int index)
 void key_water(int index)
 {
   int value = 0;
+  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("TYPE THE AMOUNT AND");
   lcd.setCursor(0, 1);
@@ -259,13 +260,13 @@ void loop()
         char key = keypad.getKey();
         switch (key)
         {
-        case 1:
+        case '1':
           digitalWrite(valve, HIGH);
           delay(2000);
           digitalWrite(valve, LOW);
           lcd.clear();
           break;
-        case 2:
+        case '2':
           key_water(index);
           break;
 
