@@ -160,6 +160,7 @@ void sonar_water(int index)
 void key_water(int index)
 {
   int value = 0;
+  int exit = 0;
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("TYPE THE AMOUNT AND");
@@ -198,6 +199,7 @@ void key_water(int index)
             {
               print_consumed_water(index, liter);
               delay(2000);
+              exit = 1;
               break;
             }
           }
@@ -209,6 +211,7 @@ void key_water(int index)
           lcd.print("NOT ENOUGH MONEY");
           delay(2000);
           lcd.clear();
+          exit = 1;
         }
         break;
       }
@@ -258,35 +261,22 @@ void loop()
       while (data[index].tk > 0)
       {
         char key = keypad.getKey();
-        switch (key)
+        if (key)
         {
-        case '1':
-          digitalWrite(valve, HIGH);
-          delay(2000);
-          digitalWrite(valve, LOW);
-          lcd.clear();
-          break;
-        case '2':
-          key_water(index);
-          break;
-
-        default:
-          break;
+          if (key == '1')
+          { // OTP
+            digitalWrite(valve, HIGH);
+            delay(2000);
+            digitalWrite(valve, LOW);
+            lcd.clear();
+            break;
+          }
+          else if (key == '2')
+          {
+            key_water(index);
+            break;
+          }
         }
-        // if (key)
-        // {
-        //   if (key == '1')
-        //   { // OTP
-        //     digitalWrite(valve, HIGH);
-        //     delay(2000);
-        //     digitalWrite(valve, LOW);
-        //     lcd.clear();
-        //     break;
-        //   }
-        //   else if (key == '2')
-        //   {
-        //   }
-        // }
         if (sonar() <= 4)
         {
           sonar_water(index);
