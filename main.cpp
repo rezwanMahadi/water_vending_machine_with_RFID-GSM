@@ -34,12 +34,13 @@ struct UserData
   String name;
   float tk;
   String number;
-  String OTP_sent;
+  String otp_buffer;
+  String tk_buffer;
 };
 
 UserData data[] = {
-    {"23c6d15", "Mr Sunny", 10, "01644644810", ""},
-    {"43452716", "Mr Kawsar", 10, "01791154170", ""}};
+    {"23c6d15", "Mr Sunny", 10, "01644644810", "", ""},
+    {"43452716", "Mr Kawsar", 10, "01791154170", "", ""}};
 
 long currentMillis = 0;
 long previousMillis = 0;
@@ -268,10 +269,11 @@ void received_message(int delimiterIndex)
         break;
       }
     }
-    if (sender == data[index].number && data[index].OTP_sent.isEmpty())
+    if (sender == data[index].number && data[index].otp_buffer.isEmpty())
     {
-      data[index].OTP_sent = generateOTP(6);
-      String message = "Here is your OTP : " + data[index].OTP_sent;
+      data[index].otp_buffer = generateOTP(6);
+      data[index].tk_buffer = tk;
+      String message = "Here is your OTP : " + data[index].otp_buffer;
       send_message(sender, message);
       receivedMessage = "";
       lcd.clear();
@@ -332,7 +334,10 @@ void setup()
 
 void loop()
 {
-  updateSerial();
+  if (serialsms.available())
+  {
+    updateSerial();
+  }
   if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial())
   {
     String uid = "";
@@ -352,6 +357,7 @@ void loop()
     if (index != -1)
     {
       printUserData(index);
+      int value = 0;
       while (data[index].tk > 0)
       {
         char key = keypad.getKey();
@@ -359,10 +365,56 @@ void loop()
         {
           if (key == '1')
           { // OTP
-            digitalWrite(valve, HIGH);
-            delay(2000);
-            digitalWrite(valve, LOW);
             lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("ENTER YOUR OTP AND");
+            lcd.setCursor(0, 1);
+            lcd.print("PRESS #");
+            lcd.setCursor(i, 2);
+            lcd.blink();
+            while (true)
+            {
+              char key = keypad.getKey();
+              if (key >= '0' && key <= '9')
+              {
+                value = value * 10 + (key - '0');
+                i++;
+                lcd.setCursor(i, 2);
+                lcd.print(key);
+              }
+              else if (key == '#')
+              {
+                i = 0;
+                lcd.noBlink();
+                lcd.noCursor();
+                if (value == data[index].otp_buffer.toInt())
+                {
+                  data[index].tk = data[index].tk + data[index].tk_buffer.toInt();
+                  lcd.clear();
+                  lcd.setCursor(0, 0);
+                  String a = "THANK YOU " + data[index].name;
+                  lcd.print(a);
+                  lcd.setCursor(0, 1);
+                  lcd.print("RECHARGE SUCCESSFUL");
+                  lcd.setCursor(0, 2);
+                  String b = "BALANCE:" + String(data[index].tk, 2) + "BDT";
+                  lcd.print(b);
+                  data[index].otp_buffer = "";
+                  data[index].tk_buffer = "";
+                  delay(3000);
+                  lcd.clear();
+                }
+                else
+                {
+                  lcd.clear();
+                  lcd.setCursor(0, 0);
+                  lcd.print("OTP NOT MATCHED");
+                  delay(3000);
+                  lcd.clear();
+                }
+                break;
+              }
+            }
             break;
           }
           else if (key == '2')
