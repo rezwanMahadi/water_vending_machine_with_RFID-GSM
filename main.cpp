@@ -23,7 +23,7 @@ byte rowPins[ROWS] = {13, 12, 14, 27};
 byte colPins[COLS] = {26, 25, 33};
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-HardwareSerial serialSms(1);
+HardwareSerial serialsms(1);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 MFRC522 rfid(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key2;
@@ -33,11 +33,13 @@ struct UserData
   String uid;
   String name;
   float tk;
+  String number;
+  String OTP_sent;
 };
 
 UserData data[] = {
-    {"23c6d15", "Mr Sunny", 10},
-    {"43452716", "Mr Kawsar", 10}};
+    {"23c6d15", "Mr Sunny", 10, "01644644810", ""},
+    {"43452716", "Mr Kawsar", 10, "01791154170", ""}};
 
 long currentMillis = 0;
 long previousMillis = 0;
@@ -52,6 +54,7 @@ float liter = 0.0;
 float tk = 0.0;
 float perLiterTk = 1.0;
 int i = 0;
+String receivedMessage = "";
 
 void IRAM_ATTR pulseCounter()
 {
@@ -219,9 +222,90 @@ void key_water(int index)
   }
 }
 
+void updateSerial();
+
+void send_message(String number, String message)
+{
+  String recepiant = "AT+CMGS=\"+88" + number + "\"";
+  serialsms.println(recepiant); // 1)
+  updateSerial();
+  delay(1000);
+  serialsms.print(message); // 2) text content
+  updateSerial();
+  delay(1000);
+  serialsms.write((char)26); // 3)
+  updateSerial();
+  delay(1000);
+}
+
+String generateOTP(int digits)
+{
+  String otp = "";
+  for (int i = 0; i < digits; i++)
+  {
+    int randomDigit = random(0, 9);
+    otp += String(randomDigit);
+  }
+  return otp;
+}
+
+void received_message(int delimiterIndex)
+{
+  if (delimiterIndex != -1)
+  {
+    String keyword1 = "You have received Tk";
+    String keyword2 = "from";
+    String tk = receivedMessage.substring((receivedMessage.indexOf(keyword1) + keyword1.length() + 1), receivedMessage.indexOf(keyword2) - 1);
+    String sender = receivedMessage.substring(receivedMessage.indexOf(keyword2) + keyword2.length() + 1, receivedMessage.indexOf(keyword2) + keyword2.length() + 12);
+    Serial.print("string: ");
+    Serial.println(receivedMessage);
+    int index = -1;
+    for (int i = 0; i < sizeof(data) / sizeof(data[0]); i++)
+    {
+      if (sender == data[i].number)
+      {
+        index = i;
+        break;
+      }
+    }
+    if (sender == data[index].number && data[index].OTP_sent.isEmpty())
+    {
+      data[index].OTP_sent = generateOTP(6);
+      String message = "Here is your OTP : " + data[index].OTP_sent;
+      send_message(sender, message);
+      receivedMessage = "";
+      lcd.clear();
+    }
+  }
+}
+
+void updateSerial()
+{
+  while (Serial.available())
+  {
+    serialsms.write(Serial.read()); // Forward what Serial received to Software Serial Port
+  }
+  if (serialsms.available())
+  {
+    char receivedChar = serialsms.read(); // Read the received character
+    if (receivedChar != '\r' && receivedChar != '\n')
+    {
+      receivedMessage += receivedChar; // Append the character to the received message
+    }
+    // Serial.write(serialsms.read());
+    Serial.write(receivedChar);
+    if (receivedChar == '\n')
+    {
+      int delimiterIndex = receivedMessage.indexOf(':');
+      received_message(delimiterIndex);
+      receivedMessage = "";
+    }
+  }
+}
+
 void setup()
 {
-  serialSms.begin(9600, SERIAL_8N1, 2, 4);
+  serialsms.begin(9600, SERIAL_8N1, 2, 4);
   Serial.begin(115200);
   SPI.begin();
   rfid.PCD_Init();
@@ -234,11 +318,21 @@ void setup()
   pinMode(SENSOR, INPUT);
   digitalWrite(valve, LOW);
   delay(1000);
+  serialsms.println("AT"); // Once the handshake test is successful, it will return "OK"
+  updateSerial();
+  delay(1000);
+  serialsms.println("AT+CMGF=1"); // Configuring TEXT mode
+  updateSerial();
+  delay(1000);
+  serialsms.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
+  updateSerial();
+  delay(1000);
   attachInterrupt(digitalPinToInterrupt(SENSOR), pulseCounter, RISING);
 }
 
 void loop()
 {
+  updateSerial();
   if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial())
   {
     String uid = "";
