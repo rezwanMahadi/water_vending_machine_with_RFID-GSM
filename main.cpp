@@ -30,17 +30,6 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);
 MFRC522 rfid(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key2;
 
-struct field_name
-{
-  String uid;
-  String name;
-  String consumed_water;
-  String balance;
-  String recharged_amount;
-};
-
-field_name field[] = {"&field1=", "&field2=", "&field3=", "&field4=", "&field5="};
-
 struct UserData
 {
   String uid;
