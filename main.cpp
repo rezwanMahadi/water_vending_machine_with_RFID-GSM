@@ -1,9 +1,11 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Keypad.h>
+#include <HTTPClient.h>
 
 #define RST_PIN 17
 #define SS_PIN 16
@@ -28,6 +30,17 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);
 MFRC522 rfid(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key2;
 
+struct field_name
+{
+  String uid;
+  String name;
+  String consumed_water;
+  String balance;
+  String recharged_amount;
+};
+
+field_name field[] = {"&field1=", "&field2=", "&field3=", "&field4=", "&field5="};
+
 struct UserData
 {
   String uid;
@@ -39,9 +52,13 @@ struct UserData
 };
 
 UserData data[] = {
-    {"23c6d15", "Mr Sunny", 10, "01644644810", "", ""},
-    {"43452716", "Mr Kawsar", 10, "01791154170", "", ""}};
+    {"23c6d15", "Mr_Sunny", 10, "01644644810", "", ""},
+    {"43452716", "Mr_Kawsar", 10, "01791154170", "", ""}};
 
+const char *ssid = "RedmiNote7";
+const char *pass = "245025asdfjkl";
+const char *server = "api.thingspeak.com";
+String apiKey = "BISR7UH48FC99FA4";
 long currentMillis = 0;
 long previousMillis = 0;
 int interval = 1000;
@@ -56,6 +73,64 @@ float tk = 0.0;
 float perLiterTk = 1.0;
 int i = 0;
 String receivedMessage = "";
+
+void wificonnect()
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("CONNECTING WIFI");
+  lcd.setCursor(0, 1);
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    lcd.setCursor(i, 1);
+    lcd.print(".");
+    i++;
+  }
+  i = 0;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("WIFI CONNECTED");
+  lcd.setCursor(0, 1);
+  lcd.print(WiFi.localIP());
+  delay(3000);
+  lcd.clear();
+}
+
+void send_thingspeak(int index, int case_number)
+{
+  String url = "";
+  switch (case_number)
+  {
+  case 1:
+    url = "http://" + String(server) + "/update?api_key=" + String(apiKey) + "&field1=" +
+          data[index].uid + "&field2=" + data[index].name + "&field4=" + String(data[index].tk) +
+          "&field5=" + data[index].tk_buffer;
+    break;
+
+  default:
+    url = "http://" + String(server) + "/update?api_key=" + String(apiKey) + "&field1=" +
+          data[index].uid + "&field2=" + data[index].name + "&field3=" + String(liter) +
+          "&field4=" + String(data[index].tk);
+    break;
+  }
+  Serial.println();
+  Serial.println(url);
+  HTTPClient http;
+  http.begin(url);
+  int httpResponseCode = http.GET();
+  if (httpResponseCode == 200)
+  {
+    Serial.println("Data sent successfully!");
+  }
+  else
+  {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  http.end();
+}
 
 void IRAM_ATTR pulseCounter()
 {
@@ -107,6 +182,7 @@ void print_consumed_water(int index, float l)
   lcd.setCursor(0, 2);
   String ntk = "BALANCE : " + String(data[index].tk) + "Tk";
   lcd.print(ntk);
+  send_thingspeak(index,0);
   currentMillis = 0;
   previousMillis = 0;
   pulse1Sec = 0;
@@ -164,7 +240,6 @@ void sonar_water(int index)
 void key_water(int index)
 {
   int value = 0;
-  int exit = 0;
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("TYPE THE AMOUNT AND");
@@ -203,7 +278,6 @@ void key_water(int index)
             {
               print_consumed_water(index, liter);
               delay(2000);
-              exit = 1;
               break;
             }
           }
@@ -215,7 +289,6 @@ void key_water(int index)
           lcd.print("NOT ENOUGH MONEY");
           delay(2000);
           lcd.clear();
-          exit = 1;
         }
         break;
       }
@@ -261,11 +334,11 @@ void received_message(int delimiterIndex)
     Serial.print("string: ");
     Serial.println(receivedMessage);
     int index = -1;
-    for (int i = 0; i < sizeof(data) / sizeof(data[0]); i++)
+    for (int index_finder = 0; index_finder < sizeof(data) / sizeof(data[0]); index_finder++)
     {
-      if (sender == data[i].number)
+      if (sender == data[index_finder].number)
       {
-        index = i;
+        index = index_finder;
         break;
       }
     }
@@ -334,119 +407,124 @@ void setup()
 
 void loop()
 {
-  if (serialsms.available())
+  while (WiFi.status() == WL_CONNECTED)
   {
-    updateSerial();
-  }
-  if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial())
-  {
-    String uid = "";
-    for (byte i = 0; i < rfid.uid.size; i++)
+    if (serialsms.available())
     {
-      uid += String(rfid.uid.uidByte[i], HEX);
+      updateSerial();
     }
-    int index = -1;
-    for (int i = 0; i < sizeof(data) / sizeof(data[0]); i++)
+    else if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial())
     {
-      if (uid == data[i].uid)
+      String uid = "";
+      for (byte i = 0; i < rfid.uid.size; i++)
       {
-        index = i;
-        break;
+        uid += String(rfid.uid.uidByte[i], HEX);
       }
-    }
-    if (index != -1)
-    {
-      printUserData(index);
-      int value = 0;
-      while (data[index].tk > 0)
+      int index = -1;
+      for (int index_finder = 0; index_finder < sizeof(data) / sizeof(data[0]); index_finder++)
       {
-        char key = keypad.getKey();
-        if (key)
+        if (uid == data[index_finder].uid)
         {
-          if (key == '1')
-          { // OTP
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("ENTER YOUR OTP AND");
-            lcd.setCursor(0, 1);
-            lcd.print("PRESS #");
-            lcd.setCursor(i, 2);
-            lcd.blink();
-            while (true)
-            {
-              char key = keypad.getKey();
-              if (key >= '0' && key <= '9')
-              {
-                value = value * 10 + (key - '0');
-                i++;
-                lcd.setCursor(i, 2);
-                lcd.print(key);
-              }
-              else if (key == '#')
-              {
-                i = 0;
-                lcd.noBlink();
-                lcd.noCursor();
-                if (value == data[index].otp_buffer.toInt())
-                {
-                  data[index].tk = data[index].tk + data[index].tk_buffer.toInt();
-                  lcd.clear();
-                  lcd.setCursor(0, 0);
-                  String a = "THANK YOU " + data[index].name;
-                  lcd.print(a);
-                  lcd.setCursor(0, 1);
-                  lcd.print("RECHARGE SUCCESSFUL");
-                  lcd.setCursor(0, 2);
-                  String b = "BALANCE:" + String(data[index].tk, 2) + "BDT";
-                  lcd.print(b);
-                  data[index].otp_buffer = "";
-                  data[index].tk_buffer = "";
-                  delay(3000);
-                  lcd.clear();
-                }
-                else
-                {
-                  lcd.clear();
-                  lcd.setCursor(0, 0);
-                  lcd.print("OTP NOT MATCHED");
-                  delay(3000);
-                  lcd.clear();
-                }
-                break;
-              }
-            }
-            break;
-          }
-          else if (key == '2')
-          {
-            key_water(index);
-            break;
-          }
-        }
-        if (sonar() <= 4)
-        {
-          sonar_water(index);
+          index = index_finder;
           break;
         }
       }
+      if (index != -1)
+      {
+        printUserData(index);
+        int value = 0;
+        while (data[index].tk > 0)
+        {
+          char key = keypad.getKey();
+          if (key)
+          {
+            if (key == '1')
+            { // OTP
+              lcd.clear();
+              lcd.setCursor(0, 0);
+              lcd.print("ENTER YOUR OTP AND");
+              lcd.setCursor(0, 1);
+              lcd.print("PRESS #");
+              lcd.setCursor(i, 2);
+              lcd.blink();
+              while (true)
+              {
+                char key = keypad.getKey();
+                if (key >= '0' && key <= '9')
+                {
+                  value = value * 10 + (key - '0');
+                  i++;
+                  lcd.setCursor(i, 2);
+                  lcd.print(key);
+                }
+                else if (key == '#')
+                {
+                  i = 0;
+                  lcd.noBlink();
+                  lcd.noCursor();
+                  if (value == data[index].otp_buffer.toInt())
+                  {
+                    data[index].tk = data[index].tk + data[index].tk_buffer.toInt();
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    String a = "THANK YOU " + data[index].name;
+                    lcd.print(a);
+                    lcd.setCursor(0, 1);
+                    lcd.print("RECHARGE SUCCESSFUL");
+                    lcd.setCursor(0, 2);
+                    String b = "BALANCE:" + String(data[index].tk, 2) + "BDT";
+                    lcd.print(b);
+                    send_thingspeak(index,1);
+                    data[index].otp_buffer = "";
+                    data[index].tk_buffer = "";
+                    delay(3000);
+                    lcd.clear();
+                  }
+                  else
+                  {
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("OTP NOT MATCHED");
+                    delay(3000);
+                    lcd.clear();
+                  }
+                  break;
+                }
+              }
+              break;
+            }
+            else if (key == '2')
+            {
+              key_water(index);
+              break;
+            }
+          }
+          if (sonar() <= 4)
+          {
+            sonar_water(index);
+            break;
+          }
+        }
+      }
+      else
+      {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("UID not found");
+        delay(2000);
+        lcd.clear();
+      }
+      rfid.PICC_HaltA();
+      rfid.PCD_StopCrypto1();
     }
     else
     {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("UID not found");
-      delay(2000);
-      lcd.clear();
+      lcd.setCursor(4, 1);
+      lcd.print("WATER VENDING");
+      lcd.setCursor(6, 2);
+      lcd.print("MACHINE");
+      lcd.setCursor(0, 3);
     }
-    rfid.PICC_HaltA();
-    rfid.PCD_StopCrypto1();
   }
-  else
-  {
-    lcd.setCursor(4, 1);
-    lcd.print("WATER VENDING");
-    lcd.setCursor(6, 2);
-    lcd.print("MACHINE");
-    lcd.setCursor(0, 3);
-  }
+  wificonnect();
 }
