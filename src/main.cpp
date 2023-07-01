@@ -41,7 +41,7 @@ struct UserData
 };
 
 UserData data[] = {
-    {"23c6d15", "Mr_Sunny", 10, "01644644810", "", ""},
+    {"23c6d15", "Mr_Sani", 10, "01644644810", "", ""},
     {"43452716", "Mr_Kawsar", 10, "01791154170", "", ""}};
 
 const char *ssid = "RedmiNote7";
@@ -169,6 +169,9 @@ void print_consumed_water(int index, float l)
   String lt = "CONSUMED : " + String(l, 3) + "L";
   lcd.print(lt);
   lcd.setCursor(0, 2);
+  String c = "COST : " + String(l*perLiterTk, 3) + "Tk";
+  lcd.print(c);
+  lcd.setCursor(0, 3);
   String ntk = "BALANCE : " + String(data[index].tk) + "Tk";
   lcd.print(ntk);
   send_thingspeak(index,0);
@@ -180,7 +183,7 @@ void print_consumed_water(int index, float l)
   totalMilliLitres = 0;
   liter = 0.0;
   tk = 0.0;
-  delay(2000);
+  delay(5000);
   lcd.clear();
 }
 
@@ -381,7 +384,6 @@ void setup()
   pinMode(ECHO_PIN, INPUT);
   pinMode(SENSOR, INPUT);
   digitalWrite(valve, LOW);
-  delay(1000);
   serialsms.println("AT"); // Once the handshake test is successful, it will return "OK"
   updateSerial();
   delay(1000);
@@ -391,6 +393,14 @@ void setup()
   serialsms.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
   updateSerial();
   delay(1000);
+  lcd.setCursor(0,0);
+  lcd.print("PROJECT OF :");
+  lcd.setCursor(0,1);
+  lcd.print("SANI  ID: ET183045");
+  lcd.setCursor(0,2);
+  lcd.print("KAWSAR  ID: ET183041");
+  delay(5000);
+  lcd.clear();
   attachInterrupt(digitalPinToInterrupt(SENSOR), pulseCounter, RISING);
 }
 
