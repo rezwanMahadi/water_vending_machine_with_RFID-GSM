@@ -62,6 +62,9 @@ float tk = 0.0;
 float perLiterTk = 1.0;
 int i = 0;
 String receivedMessage = "";
+bool isFractional = false; // Flag to track fractional mode
+int fraction = 0;          // Variable to store the fractional part
+String fractionValue = "";
 
 void wificonnect()
 {
@@ -169,12 +172,12 @@ void print_consumed_water(int index, float l)
   String lt = "CONSUMED : " + String(l, 3) + "L";
   lcd.print(lt);
   lcd.setCursor(0, 2);
-  String c = "COST : " + String(l*perLiterTk, 3) + "Tk";
+  String c = "COST : " + String(l * perLiterTk, 3) + "Tk";
   lcd.print(c);
   lcd.setCursor(0, 3);
   String ntk = "BALANCE : " + String(data[index].tk) + "Tk";
   lcd.print(ntk);
-  send_thingspeak(index,0);
+  send_thingspeak(index, 0);
   currentMillis = 0;
   previousMillis = 0;
   pulse1Sec = 0;
@@ -244,12 +247,34 @@ void key_water(int index)
     char key = keypad.getKey();
     if (key)
     {
-      if (key >= '0' && key <= '9')
+      if ((key >= '0' && key <= '9') || key == '*')
       {
-        value = value * 10 + (key - '0');
-        i++;
-        lcd.setCursor(i, 2);
-        lcd.print(key);
+        if (key == '*')
+        {
+          // Toggle fractional mode
+          i++;
+          isFractional = true;
+          lcd.setCursor(i, 2);
+          lcd.print('.'); // Print decimal point on LCD
+        }
+        else
+        {
+          if (!isFractional)
+          {
+            value = value * 10 + (key - '0');
+            i++;
+            lcd.setCursor(i, 2);
+            lcd.print(key);
+          }
+          else
+          {
+            fraction = fraction * 10 + (key - '0');
+            i++;
+            lcd.setCursor(i, 2);
+            lcd.print(key);
+            fractionValue += key;
+          }
+        }
       }
       else if (key == '#')
       {
@@ -260,13 +285,15 @@ void key_water(int index)
         lcd.setCursor(0, 0);
         lcd.print("PROCESSINNG.........");
         delay(2000);
-        float money = value * perLiterTk;
+        String t = "0." + fractionValue;
+        float totalValue = value + t.toFloat();
+        float money = totalValue * perLiterTk;
         if (money <= data[index].tk)
         {
           while (true)
           {
             digitalWrite(valve, HIGH);
-            if (measure_water() >= value)
+            if (measure_water() >= totalValue)
             {
               print_consumed_water(index, liter);
               delay(2000);
@@ -393,11 +420,11 @@ void setup()
   serialsms.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
   updateSerial();
   delay(1000);
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("PROJECT OF :");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print("SANI  ID: ET183045");
-  lcd.setCursor(0,2);
+  lcd.setCursor(0, 2);
   lcd.print("KAWSAR  ID: ET183041");
   delay(5000);
   lcd.clear();
@@ -473,7 +500,7 @@ void loop()
                     lcd.setCursor(0, 2);
                     String b = "BALANCE:" + String(data[index].tk, 2) + "BDT";
                     lcd.print(b);
-                    send_thingspeak(index,1);
+                    send_thingspeak(index, 1);
                     data[index].otp_buffer = "";
                     data[index].tk_buffer = "";
                     delay(3000);
