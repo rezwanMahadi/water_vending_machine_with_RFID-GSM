@@ -41,13 +41,13 @@ struct UserData
 };
 
 UserData data[] = {
-    {"23c6d15", "Mr_Sani", 10, "01644644810", "", ""},
-    {"43452716", "Mr_Kawsar", 10, "01791154170", "", ""}};
+    {"23c6d15", "Mr_Sani", 10, "01625006364", "", ""},
+    {"43452716", "Mr_Kawsar", 10, "01604288065", "", ""}};
 
 const char *ssid = "RedmiNote7";
 const char *pass = "245025asdfjkl";
 const char *server = "api.thingspeak.com";
-String apiKey = "BISR7UH48FC99FA4";
+String apiKey = "FVL26U4EBJGE2KNR";
 long currentMillis = 0;
 long previousMillis = 0;
 int interval = 1000;
@@ -420,8 +420,8 @@ void setup()
   serialsms.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
   updateSerial();
   delay(1000);
-  lcd.setCursor(0, 0);
-  lcd.print("PROJECT OF :");
+  lcd.setCursor(5, 0);
+  lcd.print("PROJECT OF");
   lcd.setCursor(0, 1);
   lcd.print("SANI  ID: ET183045");
   lcd.setCursor(0, 2);
